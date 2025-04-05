@@ -4,36 +4,61 @@ const http = require("http");
 const app = express();
 const path = require("path");
 const bodyParser = require("body-parser");
-const { Server } = require('socket.io');  // Importiamo il Server di socket.io
+const { Server } = require('socket.io');
 const conf = JSON.parse(fs.readFileSync("./conf.json"));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-app.use("/", express.static(path.join(__dirname, "public"))); // Serve file statici dalla cartella public
+app.use("/", express.static(path.join(__dirname, "public")));
 
 const server = http.createServer(app);
 const io = new Server(server);
+const userList = []; 
 
-server.listen(conf.port, () => {
+server.listen(5005, () => {
     console.log("Server in esecuzione sulla porta: " + conf.port);
 });
 
 io.on('connection', (socket) => {
     console.log("Socket connessa: " + socket.id);
-
-    // Invia un messaggio di benvenuto a tutti i client
-    io.emit("chat", "Nuovo cliente connesso: " + socket.id);
-
-    // Ascoltiamo i messaggi dal client
-    socket.on('message', (message) => {
-        const response = socket.id + ": " + message;
-        console.log(response);
-        io.emit("chat", response); // Invia il messaggio a tutti i client
+    socket.on('setUsername', (username) => {
+        const newUser = { socketId: socket.id, name: username };
+        userList.push(newUser);
+        io.emit("list", userList);
+    });
+    socket.on('list', () => {
+        socket.emit("list", userList); 
     });
 
-    // Gestiamo la disconnessione
+    socket.on('message', (message) => {
+        let username = 'Anonimo';
+        let userFound = false; 
+        for (let i = 0; i < userList.length; i++) {
+            if (userList[i].socketId === socket.id) {
+                username = userList[i].name;
+                userFound = true; 
+                break;
+            }
+        }
+        const response = { username: username, message: message };
+        io.emit("chat", response);
+    });
+   
+   
     socket.on('disconnect', () => {
-        console.log("Socket disconnessa: " + socket.id);
+        let userFound = false; 
+        let username = ''; 
+        for (let i = 0; i < userList.length; i++) {
+            if (userList[i].socketId === socket.id) {
+                userFound = true;
+                username = userList[i].name;               
+                userList.splice(i, 1);
+                io.emit("chat", { username: 'Server', message: `${username} ha lasciato la chat.` });
+                io.emit("list", userList);
+                break;
+            }
+        }
+    
     });
 });

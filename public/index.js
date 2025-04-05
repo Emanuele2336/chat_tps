@@ -1,39 +1,82 @@
 const input = document.getElementById("input");
 const button = document.getElementById("sendButton");
 const chat = document.getElementById("chat");
+const usernameModal = document.getElementById("usernameModal");
+const usernameInput = document.getElementById("usernameInput");
+const setUsernameButton = document.getElementById("setUsernameButton");
+const userListElement = document.getElementById("userList");
 
-const template = "<li class=\"list-group-item\">%MESSAGE</li>";
+const template = "<li class=\"list-group-item\">%USERNAME: %MESSAGE</li>";
 const messages = [];
+let username = null;
+const socket = io();
 
-const socket = io();  // Creiamo la connessione con il server WebSocket
+const showUsernameModal = () => {
+    usernameModal.classList.add("visible");
+  };
 
-// Gestiamo l'invio del messaggio quando l'utente preme "Invia" o il tasto Invio
+const hideUsernameModal = () => {
+    usernameModal.classList.remove("visible");
+  };
+
+setUsernameButton.onclick = () => {
+  const enteredUsername = usernameInput.value.trim();
+  if (enteredUsername) {
+    username = enteredUsername;
+    socket.emit("setUsername", username); 
+    hideUsernameModal();
+   
+    socket.emit("list"); 
+  } 
+};
+
+showUsernameModal();
+
 input.onkeydown = (event) => {
-  if (event.keyCode === 13) {  // Tasto Enter
+  if (event.keyCode === 13 && username) {
     event.preventDefault();
     button.click();
   }
 }
 
+
 button.onclick = () => {
-  socket.emit("message", input.value);  // Invia il messaggio al server
-  input.value = "";  // Svuota il campo di input
+  if (username && input.value.trim()) {
+    socket.emit("message", input.value);
+    input.value = "";
+  }
 }
 
-// Gestiamo i messaggi ricevuti dal server
-socket.on("chat", (message) => {
-  console.log(message);
-  messages.push(message);
-  render();  // Renderizza la lista dei messaggi
+socket.on("chat", (data) => {
+  console.log(data);
+  messages.push(data);
+  renderChat();
 });
 
-// Funzione per visualizzare i messaggi
-const render = () => {
+socket.on("list", (list) => {
+  console.log("Lista utenti ricevuta:", list);
+  renderUserList(list);
+});
+
+const renderChat = () => {
   let html = "";
-  messages.forEach((message) => {
-    const row = template.replace("%MESSAGE", message);
+  messages.forEach((item) => {
+    const row = template.replace("%MESSAGE", item.message).replace("%USERNAME", item.username);
     html += row;
   });
-  chat.innerHTML = html;  // Aggiorna la lista dei messaggi
-  window.scrollTo(0, document.body.scrollHeight);  // Scrolla fino al messaggio più recente
+  chat.innerHTML = html;
+  window.scrollTo(0, document.body.scrollHeight);
 }
+
+const renderUserList = (userList) => {
+  let html = "";
+  userList.forEach((user) => {
+    html += `<li>${user.name}</li>`;
+  });
+  userListElement.innerHTML = html;
+};
+
+socket.on('disconnect', () => {
+  console.log('Disconnesso dal server');
+  
+});
